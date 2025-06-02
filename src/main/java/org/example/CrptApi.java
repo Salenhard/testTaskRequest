@@ -11,9 +11,7 @@ import java.net.http.HttpResponse;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
+import java.util.*;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -29,7 +27,7 @@ public class CrptApi {
         this.requestLimit = requestLimit;
     }
 
-    public void process(Document document, String crypt) throws RuntimeException {
+    public HttpResponse<String> process(Document document, String crypt) throws RuntimeException {
         if (count.get() == 0)
             start = LocalDateTime.now();
         synchronized (this) {
@@ -41,15 +39,16 @@ public class CrptApi {
         int current = count.getAndIncrement();
         if (current >= requestLimit) {
             count.decrementAndGet();
-            System.out.println("Blocked");
-            return;
+            throw new RuntimeException("Blocked");
         }
-        request(document, crypt);
+        return request(document, crypt);
     }
 
-    public void request(Document document, String crypt) {
-        Request request = new Request(document, crypt);
+    public HttpResponse<String> request(Document document, String crypt) {
+        HttpResponse<String> httpResponse = null;
+        Request request = new Request(document, crypt, httpResponse);
         new Thread(request).start();
+        return httpResponse;
     }
 
     private boolean expired() {
@@ -61,36 +60,36 @@ public class CrptApi {
         CrptApi crptApi = new CrptApi(TimeUnit.SECONDS, 5);
         Production production = new Production("test", LocalDate.now(), "test", "test", LocalDate.now(), "test", "test", "test");
         Document document = new Document(new Description("test"), "test", "test", "test", true, "test", "test", "test", LocalDate.now(), "test", new HashSet<>(List.of(new Production[]{production})), LocalDate.now(), "test");
-        try {
-            crptApi.process(document, "test");
-            crptApi.process(document, "test");
-            crptApi.process(document, "test");
-            crptApi.process(document, "test");
-            crptApi.process(document, "test");
-            crptApi.process(document, "test");
-            Thread.sleep(1000);
-            crptApi.process(document, "test");
-            crptApi.process(document, "test");
-            crptApi.process(document, "test");
-            crptApi.process(document, "test");
-            crptApi.process(document, "test");
-            crptApi.process(document, "test");
-            crptApi.process(document, "test");
-            crptApi.process(document, "test");
-            crptApi.process(document, "test");
-            crptApi.process(document, "test");
-        } catch (RuntimeException | InterruptedException e) {
-            System.out.println(e.getMessage());
+        Queue<Document> queue = new ArrayDeque<>();
+        queue.add(document);
+        queue.add(document);
+        queue.add(document);
+        queue.add(document);
+        queue.add(document);
+        queue.add(document);
+        queue.add(document);
+        queue.add(document);
+        queue.add(document);
+        queue.add(document);
+        while (!queue.isEmpty()) {
+            try {
+                crptApi.process(queue.peek(), "test");
+                queue.poll();
+            } catch (Exception e) {
+                //
+            }
         }
     }
 
     class Request implements Runnable {
         private final Document document;
         private final String crypt;
+        private HttpResponse<String> response;
 
-        Request(Document document, String crypt) {
+        Request(Document document, String crypt, HttpResponse<String> response) {
             this.document = document;
             this.crypt = crypt;
+            this.response = response;
         }
 
         private JSONObject parseProduct(Production production) {
@@ -147,8 +146,7 @@ public class CrptApi {
                     .POST(HttpRequest.BodyPublishers.ofString(body.toString()))
                     .build();
             try {
-                HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
-                System.out.println(response.body());
+                response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
             } catch (IOException | InterruptedException e) {
                 System.out.println(e.getMessage());
             }
