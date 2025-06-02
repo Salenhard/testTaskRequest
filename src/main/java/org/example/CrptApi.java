@@ -38,10 +38,6 @@ public class CrptApi {
                 start = LocalDateTime.now();
             }
         }
-        if (count.get() >= requestLimit) {
-            System.out.println("Blocked");
-            return;
-        }
         int current = count.getAndIncrement();
         if (current >= requestLimit) {
             count.decrementAndGet();
